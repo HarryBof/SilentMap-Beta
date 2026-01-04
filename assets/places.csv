@@ -1,0 +1,15 @@
+name,address,lat,lng,type,wifi,noise
+Thư viện Tạ Quang Bửu,1 Đại Cồ Việt,21.0043895,105.8439327,library,true,45 dB
+Highlands Coffee,Trần Đại Nghĩa,21.0048719,105.8458739,cafe,true,75 dB
+The Coffee House,92 Lê Thanh Nghị ,21.0035061,105.8478614,cafe,true,65 dB
+Matcha Holic, 40 Tạ Quang Bửu, 21.0045883,105.8460548, cafe, true, 55 dB
+AN café, 2A Trần Đại Nghĩa, 21.0035446,105.8445787,cafe, true, 67 dB
+Mát Trà, 31 Trần Đại Nghĩa, 21.0035041,105.844495, cafe, true, 65 dB
+Thư viện Đại học Xây Dựng,1A Giải Phóng, 21.0030235,105.8423536, library,true, 42 dB
+Thư viện Kinh Tế Quốc Dân, 228 Đồng Tâm, 21.0000212,105.842565, library, true, 45 dB
+Thư viện Hà Nội, 54E Trần Hưng Đạo, 21.0216642,105.8506035, library, false, 45 dB
+Thư viện Quốc Gia Việt Nam, 31 Tràng Thi, 21.0260192,105.849308,library,false, 40 dB
+BKHUP Co-working Space, Tầng 3 A17 Tạ Quang Bửu, 21.0039807,105.8475354, workspace, true, 40dB
+Chung Workspace, 344 Phố Huế, 21.0098742,105.8513501, workspace, true,55 dB
+One more Co-working Space, 134 Ngõ Tự Do, 20.999644,105.8483449, workspace, true, 45 dB
+Infact, 342 Bà Triệu, 21.0090133,105.8488955, workspace, true, 65 dB
