@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'dart:math'; 
 import 'dart:ui' as ui; 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show rootBundle; // QUAN TRỌNG: Để đọc file CSV
+import 'package:flutter/services.dart' show rootBundle; 
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
@@ -50,19 +50,42 @@ class PlaceData {
     }
   }
 
-  // Logic màu đơn sắc
+  // Màu hiển thị trên icon loa nhỏ
   Color get noiseColor {
-    double db = 0;
-    try {
-      db = double.parse(noiseLevel.split(' ')[0]);
-    } catch (e) {
-      return Colors.grey;
-    }
-
+    double db = _parseDb();
     if (db < 50) return Colors.green; 
     if (db < 70) return Colors.amber.shade800; 
     if (db < 85) return Colors.red; 
     return Colors.purple; 
+  }
+
+  double _parseDb() {
+    try {
+      return double.parse(noiseLevel.split(' ')[0]);
+    } catch (e) {
+      return 50.0; 
+    }
+  }
+
+  // Thuật toán tạo dữ liệu biểu đồ
+  List<double> generateHourlyNoise() {
+    double baseDb = _parseDb();
+    List<double> data = [];
+    Random random = Random(name.hashCode); 
+
+    for (int hour = 7; hour <= 22; hour++) {
+      double adjustment = 0;
+      if (hour >= 7 && hour <= 9) adjustment = -10; 
+      else if (hour >= 12 && hour <= 13) adjustment = 5; 
+      else if (hour >= 18 && hour <= 20) adjustment = 8; 
+      else if (hour >= 21) adjustment = -5; 
+
+      double noise = baseDb + adjustment + (random.nextDouble() * 6 - 3);
+      if (noise < 30) noise = 30;
+      if (noise > 100) noise = 100;
+      data.add(noise);
+    }
+    return data;
   }
 }
 
@@ -86,7 +109,7 @@ class _SilentMapAppState extends State<SilentMapApp> with TickerProviderStateMix
   double _routeDistanceKm = 0.0; 
   double _routeDurationSec = 0.0; 
 
-  final List<PlaceData> _places = []; // Danh sách này sẽ được nạp từ CSV
+  final List<PlaceData> _places = []; 
   PlaceData? _selectedPlace;
 
   // Variables cho đo độ ồn
@@ -106,24 +129,19 @@ class _SilentMapAppState extends State<SilentMapApp> with TickerProviderStateMix
   @override
   void initState() {
     super.initState();
-    _loadPlacesFromCSV(); // GỌI HÀM LOAD CSV
+    _loadPlacesFromCSV(); 
     _locateMe();
   }
 
-  // --- HÀM ĐỌC DỮ LIỆU TỪ CSV ---
   Future<void> _loadPlacesFromCSV() async {
     try {
       final String rawData = await rootBundle.loadString("assets/places.csv");
       List<String> lines = rawData.split('\n');
-      
-      setState(() {
-        _places.clear();
-      });
+      setState(() { _places.clear(); });
 
       for (int i = 1; i < lines.length; i++) {
         String line = lines[i].trim();
         if (line.isEmpty) continue; 
-
         List<String> row = line.split(',');
         if (row.length < 7) continue;
 
@@ -141,19 +159,12 @@ class _SilentMapAppState extends State<SilentMapApp> with TickerProviderStateMix
 
         setState(() {
           _places.add(PlaceData(
-            name: name,
-            address: address,
-            location: LatLng(lat, lng),
-            type: type,
-            hasWifi: hasWifi,
-            noiseLevel: noise,
+            name: name, address: address, location: LatLng(lat, lng),
+            type: type, hasWifi: hasWifi, noiseLevel: noise,
           ));
         });
       }
-      print("Đã tải ${_places.length} địa điểm từ CSV.");
-    } catch (e) {
-      print("Lỗi đọc CSV: $e");
-    }
+    } catch (e) { print("Lỗi đọc CSV: $e"); }
   }
 
   @override
@@ -181,7 +192,6 @@ class _SilentMapAppState extends State<SilentMapApp> with TickerProviderStateMix
     final lngTween = Tween<double>(begin: _mapController.camera.center.longitude, end: destLocation.longitude);
     final zoomTween = Tween<double>(begin: _mapController.camera.zoom, end: destZoom);
     final rotateTween = Tween<double>(begin: _mapController.camera.rotation, end: destRotation);
-
     final controller = AnimationController(duration: const Duration(milliseconds: 1500), vsync: this);
     final Animation<double> animation = CurvedAnimation(parent: controller, curve: Curves.fastOutSlowIn);
 
@@ -192,11 +202,7 @@ class _SilentMapAppState extends State<SilentMapApp> with TickerProviderStateMix
         rotateTween.evaluate(animation),
       );
     });
-
-    animation.addStatusListener((status) {
-      if (status == AnimationStatus.completed) controller.dispose();
-    });
-
+    animation.addStatusListener((status) { if (status == AnimationStatus.completed) controller.dispose(); });
     controller.forward();
   }
 
@@ -206,7 +212,6 @@ class _SilentMapAppState extends State<SilentMapApp> with TickerProviderStateMix
         '${_myLocation.longitude},${_myLocation.latitude};'
         '${destination.longitude},${destination.latitude}'
         '?overview=full&geometries=geojson';
-
     try {
       final response = await http.get(Uri.parse(url));
       if (response.statusCode == 200) {
@@ -235,31 +240,13 @@ class _SilentMapAppState extends State<SilentMapApp> with TickerProviderStateMix
           final centerZoom = cameraFit.fit(_mapController.camera);
           _animatedMapMove(centerZoom.center, centerZoom.zoom, 0.0);
         }
-      } else {
-        setState(() => _isRouting = false);
-      }
-    } catch (e) {
-      setState(() => _isRouting = false);
-    }
+      } else { setState(() => _isRouting = false); }
+    } catch (e) { setState(() => _isRouting = false); }
   }
 
-  void _clearRoute() {
-    setState(() {
-      _routePoints = [];
-      _routeDistanceKm = 0;
-    });
-  }
-
-  void _toggleFavorite(PlaceData place) {
-    setState(() {
-      place.isFavorite = !place.isFavorite;
-    });
-  }
-
-  void _openSearchSheet() {
-    _showListSheet(_places, "Tìm kiếm địa điểm");
-  }
-
+  void _clearRoute() { setState(() { _routePoints = []; _routeDistanceKm = 0; }); }
+  void _toggleFavorite(PlaceData place) { setState(() { place.isFavorite = !place.isFavorite; }); }
+  void _openSearchSheet() { _showListSheet(_places, "Tìm kiếm địa điểm"); }
   void _openFavoritesSheet() {
     List<PlaceData> favoritePlaces = _places.where((p) => p.isFavorite).toList();
     _showListSheet(favoritePlaces, "Danh sách Yêu thích");
@@ -267,28 +254,18 @@ class _SilentMapAppState extends State<SilentMapApp> with TickerProviderStateMix
 
   void _showListSheet(List<PlaceData> dataList, String titleHint) {
     showModalBottomSheet(
-      context: context,
-      isScrollControlled: true, 
-      backgroundColor: Colors.transparent,
+      context: context, isScrollControlled: true, backgroundColor: Colors.transparent,
       builder: (context) => DraggableScrollableSheet(
-        initialChildSize: 0.9, 
-        minChildSize: 0.5,
-        maxChildSize: 0.95,
+        initialChildSize: 0.9, minChildSize: 0.5, maxChildSize: 0.95,
         builder: (_, scrollController) => SearchResultSheet(
-          scrollController: scrollController,
-          allPlaces: dataList, 
-          hintText: titleHint,
-          myLocation: _myLocation, 
+          scrollController: scrollController, allPlaces: dataList, hintText: titleHint, myLocation: _myLocation, 
           onPlaceSelected: (place) {
             Navigator.pop(context); 
             setState(() => _selectedPlace = place); 
             _animatedMapMove(place.location, 17.0, 0.0); 
           },
           onToggleFavorite: (place) => _toggleFavorite(place),
-          onGetDirection: (place) {
-             Navigator.pop(context);
-             _getDirections(place.location);
-          },
+          onGetDirection: (place) { Navigator.pop(context); _getDirections(place.location); },
         ),
       ),
     );
@@ -320,69 +297,23 @@ class _SilentMapAppState extends State<SilentMapApp> with TickerProviderStateMix
                       const Center(child: Text('Ghim vị trí đo được', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold))),
                       const SizedBox(height: 20),
                       Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        width: double.infinity, padding: const EdgeInsets.symmetric(vertical: 12),
                         decoration: BoxDecoration(color: primaryColor.withOpacity(0.15), borderRadius: BorderRadius.circular(12)),
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            const Icon(Icons.graphic_eq, color: primaryColor),
-                            const SizedBox(width: 8),
+                            const Icon(Icons.graphic_eq, color: primaryColor), const SizedBox(width: 8),
                             Text('Độ ồn: $currentNoiseLevelStr', style: const TextStyle(color: primaryColor, fontWeight: FontWeight.bold, fontSize: 16)),
                           ],
                         ),
                       ),
                       const SizedBox(height: 20),
-                      TextField(
-                        controller: nameCtrl,
-                        decoration: InputDecoration(
-                          prefixIcon: const Icon(Icons.place_outlined, color: Colors.grey),
-                          hintText: 'Tên địa điểm',
-                          contentPadding: const EdgeInsets.symmetric(vertical: 15),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: primaryColor, width: 2)),
-                        ),
-                      ),
+                      TextField(controller: nameCtrl, decoration: InputDecoration(prefixIcon: const Icon(Icons.place_outlined), hintText: 'Tên địa điểm', border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)))),
                       const SizedBox(height: 12),
-                      TextField(
-                        controller: addrCtrl,
-                        decoration: InputDecoration(
-                          prefixIcon: const Icon(Icons.map_outlined, color: Colors.grey),
-                          hintText: 'Địa chỉ (Số nhà, đường...)',
-                          contentPadding: const EdgeInsets.symmetric(vertical: 15),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: primaryColor, width: 2)),
-                        ),
-                      ),
+                      TextField(controller: addrCtrl, decoration: InputDecoration(prefixIcon: const Icon(Icons.map_outlined), hintText: 'Địa chỉ', border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)))),
                       const SizedBox(height: 20),
-                      const Text('Loại địa điểm:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                      const SizedBox(height: 10),
-                      Row(
-                        children: [
-                          _buildNewTypeOption(PlaceType.cafe, selectedType, primaryColor, (t) => setDialogState(() => selectedType = t)),
-                          const SizedBox(width: 8),
-                          _buildNewTypeOption(PlaceType.library, selectedType, primaryColor, (t) => setDialogState(() => selectedType = t)),
-                          const SizedBox(width: 8),
-                          _buildNewTypeOption(PlaceType.workspace, selectedType, primaryColor, (t) => setDialogState(() => selectedType = t)),
-                        ],
-                      ),
-                      const SizedBox(height: 20),
-                      const Text('Wifi miễn phí:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.start,
-                        children: [
-                          Radio<bool>(value: true, groupValue: hasWifi, activeColor: Colors.purple, materialTapTargetSize: MaterialTapTargetSize.shrinkWrap, onChanged: (val) => setDialogState(() => hasWifi = val!)),
-                          const Text('Có'),
-                          const SizedBox(width: 30),
-                          Radio<bool>(value: false, groupValue: hasWifi, activeColor: Colors.purple, materialTapTargetSize: MaterialTapTargetSize.shrinkWrap, onChanged: (val) => setDialogState(() => hasWifi = val!)),
-                          const Text('Không'),
-                        ],
-                      ),
-                      const SizedBox(height: 25),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        children: [
-                          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Hủy', style: TextStyle(color: Colors.grey))),
+                      Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+                          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Hủy')),
                           const SizedBox(width: 10),
                           ElevatedButton(
                             onPressed: () {
@@ -391,8 +322,7 @@ class _SilentMapAppState extends State<SilentMapApp> with TickerProviderStateMix
                                setState(() { _places.add(newPlace); _selectedPlace = newPlace; _showNoisePanel = false; });
                                Navigator.pop(context);
                             },
-                            style: ElevatedButton.styleFrom(backgroundColor: primaryColor, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)), padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 12)),
-                            child: const Text('LƯU GHIM', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                            child: const Text('LƯU GHIM'),
                           ),
                         ],
                       )
@@ -407,28 +337,6 @@ class _SilentMapAppState extends State<SilentMapApp> with TickerProviderStateMix
     );
   }
 
-  Widget _buildNewTypeOption(PlaceType type, PlaceType current, Color primaryColor, Function(PlaceType) onTap) {
-    bool isSelected = type == current;
-    IconData icon;
-    String label;
-    switch(type) {
-      case PlaceType.cafe: icon = Icons.local_cafe_outlined; label = "Cafe"; break;
-      case PlaceType.library: icon = Icons.local_library_outlined; label = "Thư viện"; break;
-      default: icon = Icons.laptop_mac; label = "Work-space"; break;
-    }
-    return Expanded(
-      child: InkWell(
-        onTap: () => onTap(type),
-        borderRadius: BorderRadius.circular(12),
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          decoration: BoxDecoration(color: isSelected ? primaryColor.withOpacity(0.1) : Colors.transparent, borderRadius: BorderRadius.circular(12), border: Border.all(color: isSelected ? primaryColor : Colors.grey.shade300, width: isSelected ? 2 : 1)),
-          child: Column(children: [Icon(icon, color: isSelected ? primaryColor : Colors.grey, size: 28), const SizedBox(height: 5), Text(label, style: TextStyle(fontSize: 12, color: isSelected ? primaryColor : Colors.grey, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal))]),
-        ),
-      ),
-    );
-  }
-
   List<Color> _getGradientColors(double db) {
     if (db < 50) return [Colors.greenAccent, Colors.teal];
     else if (db < 70) return [Colors.yellow, Colors.orange];
@@ -439,15 +347,10 @@ class _SilentMapAppState extends State<SilentMapApp> with TickerProviderStateMix
   void _preMeasureCheck() {
     if (_isRecording) return; 
     if (_hasShownWarning) { _startMeasurement(); return; }
-    showDialog(
-      context: context, barrierDismissible: false, 
-      builder: (context) => AlertDialog(
-        title: const Row(children: [Icon(Icons.warning_amber_rounded, color: Colors.orange), SizedBox(width: 10), Text("Lưu ý")]),
-        content: const Text("Để kết quả được chính xác nhất, vui lòng đặt điện thoại xuống bàn và giữ yên lặng khi đo."),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Hủy")),
-          ElevatedButton(onPressed: () { setState(() { _hasShownWarning = true; }); Navigator.pop(context); _startMeasurement(); }, child: const Text("ĐO NGAY"))
-        ],
+    showDialog(context: context, builder: (context) => AlertDialog(
+        title: const Text("Lưu ý"),
+        content: const Text("Vui lòng giữ yên lặng khi đo."),
+        actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text("Hủy")), ElevatedButton(onPressed: () { setState(() { _hasShownWarning = true; }); Navigator.pop(context); _startMeasurement(); }, child: const Text("ĐO NGAY"))],
       ),
     );
   }
@@ -504,15 +407,7 @@ class _SilentMapAppState extends State<SilentMapApp> with TickerProviderStateMix
               if (_routePoints.isNotEmpty) ...[
                  PolylineLayer(polylines: [Polyline(points: _routePoints, strokeWidth: 5.0, color: Colors.blueAccent)]),
                  MarkerLayer(markers: [
-                   Marker(
-                     point: _routePoints[_routePoints.length ~/ 2], 
-                     width: 80, height: 30,
-                     child: Container(
-                       alignment: Alignment.center,
-                       decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15), border: Border.all(color: Colors.blueAccent), boxShadow: [const BoxShadow(color: Colors.black26, blurRadius: 4)]),
-                       child: Text("${_routeDistanceKm.toStringAsFixed(1)} km", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.blueAccent)),
-                     ),
-                   )
+                   Marker(point: _routePoints[_routePoints.length ~/ 2], width: 80, height: 30, child: Container(alignment: Alignment.center, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15), border: Border.all(color: Colors.blueAccent)), child: Text("${_routeDistanceKm.toStringAsFixed(1)} km", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.blueAccent))))
                  ]),
               ],
 
@@ -523,12 +418,12 @@ class _SilentMapAppState extends State<SilentMapApp> with TickerProviderStateMix
                   Marker(point: _myLocation, width: 60, height: 60, child: const PulsingLocationDot()),
                   
                   ..._places.where((place) {
-                    if (isNavigating) {
-                      return place == _selectedPlace; 
-                    }
+                    if (isNavigating) return place == _selectedPlace;
                     return true; 
                   }).map((place) => Marker(
-                    point: place.location, width: 50, height: 50, alignment: Alignment.topCenter, 
+                    point: place.location, 
+                    width: 50, height: 50, 
+                    alignment: Alignment.bottomCenter, // Mũi nhọn chạm đất
                     child: GestureDetector(
                       onTap: () { setState(() { _selectedPlace = place; }); },
                       child: Column(
@@ -545,12 +440,12 @@ class _SilentMapAppState extends State<SilentMapApp> with TickerProviderStateMix
                     ),
                   )).toList(),
 
-                  // --- FIX BONG BÓNG CHE GHIM (HEIGHT 300 + SIZEDBOX) ---
+                  // --- WIDGET BONG BÓNG ---
                   if (_selectedPlace != null && !isNavigating) 
                     Marker(
                       point: _selectedPlace!.location, 
-                      width: 280, 
-                      height: 300, 
+                      width: 320, 
+                      height: 326, // Tăng chiều cao để chứa đủ nội dung
                       alignment: Alignment.topCenter, 
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.end,
@@ -561,7 +456,7 @@ class _SilentMapAppState extends State<SilentMapApp> with TickerProviderStateMix
                             onDirectionsPressed: () { _getDirections(_selectedPlace!.location); },
                             onFavoritePressed: () => _toggleFavorite(_selectedPlace!), 
                           ),
-                          const SizedBox(height: 50), // Khoảng trống đẩy bong bóng lên
+                          const SizedBox(height: 2), 
                         ],
                       ),
                     ),
@@ -604,126 +499,46 @@ class _SilentMapAppState extends State<SilentMapApp> with TickerProviderStateMix
                       ),
                       const SizedBox(height: 20),
                       ShaderMask(
-                        shaderCallback: (Rect bounds) {
-                          return LinearGradient(colors: currentGradient, begin: Alignment.topCenter, end: Alignment.bottomCenter).createShader(bounds);
-                        },
+                        shaderCallback: (Rect bounds) => LinearGradient(colors: currentGradient, begin: Alignment.topCenter, end: Alignment.bottomCenter).createShader(bounds),
                         blendMode: BlendMode.srcIn,
                         child: Text(_currentDb > 0 ? _currentDb.toStringAsFixed(1) : "--", style: const TextStyle(fontSize: 70, fontWeight: FontWeight.w900, color: Colors.white)),
                       ),
                       const Text("dB", style: TextStyle(color: Colors.grey)),
-                      const SizedBox(height: 10),
-                      Text(_noiseStatus, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500, color: currentGradient.last)),
+                      if (_isRecording) ...[const SizedBox(height: 15), LinearProgressIndicator(value: _progressValue, backgroundColor: Colors.grey[200], color: currentGradient.last, minHeight: 8, borderRadius: BorderRadius.circular(5))],
                       const SizedBox(height: 15),
-                      if (_isRecording) LinearProgressIndicator(value: _progressValue, backgroundColor: Colors.grey[200], color: currentGradient.last, minHeight: 8, borderRadius: BorderRadius.circular(5)),
-                      const SizedBox(height: 15),
-                      SizedBox(
-                        width: double.infinity,
-                        height: 50,
-                        child: Row(
-                          children: [
-                            Expanded(
-                              flex: hasFinishedMeasuring ? 4 : 1, 
-                              child: ElevatedButton(
-                                onPressed: _isRecording ? null : _preMeasureCheck,
-                                style: ElevatedButton.styleFrom(backgroundColor: currentGradient.last, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15))),
-                                child: Text(_isRecording ? "ĐANG ĐO..." : (hasFinishedMeasuring ? "ĐO LẠI" : "BẮT ĐẦU ĐO")),
-                              ),
-                            ),
-                            if (hasFinishedMeasuring) ...[
-                              const SizedBox(width: 10),
-                              Expanded(
-                                flex: 6, 
-                                child: ElevatedButton.icon(
-                                  onPressed: _showAddPlaceDialog,
-                                  icon: const Icon(Icons.add_location_alt),
-                                  label: const Text("GHIM VỊ TRÍ"),
-                                  style: ElevatedButton.styleFrom(backgroundColor: Colors.orange, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15))),
-                                ),
-                              ),
-                            ]
-                          ],
-                        ),
-                      )
+                      SizedBox(width: double.infinity, height: 50, child: Row(children: [Expanded(flex: hasFinishedMeasuring ? 4 : 1, child: ElevatedButton(onPressed: _isRecording ? null : _preMeasureCheck, style: ElevatedButton.styleFrom(backgroundColor: currentGradient.last, foregroundColor: Colors.white), child: Text(_isRecording ? "ĐO..." : "BẮT ĐẦU ĐO"))), if (hasFinishedMeasuring) ...[const SizedBox(width: 10), Expanded(flex: 6, child: ElevatedButton.icon(onPressed: _showAddPlaceDialog, icon: const Icon(Icons.add_location_alt), label: const Text("GHIM VỊ TRÍ"), style: ElevatedButton.styleFrom(backgroundColor: Colors.orange, foregroundColor: Colors.white)))]])),
                     ],
                   ),
                 ),
               ),
             ),
 
-          // 4. BUTTONS CỤM BÊN PHẢI (ẨN KHI DẪN ĐƯỜNG)
+          // 4. BUTTONS
           if (!_routePoints.isNotEmpty) 
             Positioned(
               bottom: _showNoisePanel ? 370 : 30, right: 15,
-              child: Column(
-                children: [
+              child: Column(children: [
                   FloatingActionButton(heroTag: "btnFav", onPressed: _openFavoritesSheet, backgroundColor: Colors.white, child: const Icon(Icons.favorite, color: Colors.redAccent)),
                   const SizedBox(height: 15),
                   FloatingActionButton(heroTag: "btnNoise", onPressed: _isRecording ? null : () => setState(() => _showNoisePanel = !_showNoisePanel), backgroundColor: _isRecording ? Colors.grey[300] : Colors.white, child: Icon(Icons.graphic_eq, color: _showNoisePanel ? Colors.teal : Colors.black87)),
                   const SizedBox(height: 15),
                   FloatingActionButton(heroTag: "btnGPS", onPressed: _locateMe, backgroundColor: Colors.white, child: const Icon(Icons.my_location, color: Colors.blue)),
-                ],
-              ),
+              ]),
             ),
 
-          // 5. THANH THÔNG TIN DẪN ĐƯỜNG
+          // 5. NAV BAR
           if (_routePoints.isNotEmpty)
-            Positioned(
-              bottom: 0, left: 0, right: 0,
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 20),
-                decoration: const BoxDecoration(
-                  color: Colors.white,
-                  boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10, offset: Offset(0, -2))],
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(20))
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceAround,
-                      children: [
-                        _buildTransportItem(Icons.directions_walk, "$walkTime phút"),
-                        _buildTransportItem(Icons.two_wheeler, "$bikeTime phút"),
-                        _buildTransportItem(Icons.directions_car, "$carTime phút"),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: _clearRoute,
-                        style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent, foregroundColor: Colors.white),
-                        child: const Text("Kết thúc dẫn đường"),
-                      ),
-                    )
-                  ],
-                ),
-              ),
-            ),
+            Positioned(bottom: 0, left: 0, right: 0, child: Container(padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 20), decoration: const BoxDecoration(color: Colors.white, boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10)], borderRadius: BorderRadius.vertical(top: Radius.circular(20))), child: Column(mainAxisSize: MainAxisSize.min, children: [Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [_buildTransportItem(Icons.directions_walk, "$walkTime p"), _buildTransportItem(Icons.two_wheeler, "$bikeTime p"), _buildTransportItem(Icons.directions_car, "$carTime p")]), const SizedBox(height: 10), SizedBox(width: double.infinity, child: ElevatedButton(onPressed: _clearRoute, style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent, foregroundColor: Colors.white), child: const Text("Kết thúc dẫn đường")))]))),
         ],
       ),
     );
   }
 
   Widget _buildTransportItem(IconData icon, String time) {
-    return Column(
-      children: [
-        Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: Colors.blue.withOpacity(0.1), 
-            shape: BoxShape.circle
-          ),
-          child: Icon(icon, color: Colors.blue), 
-        ),
-        const SizedBox(height: 4),
-        Text(time, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.blue)),
-      ],
-    );
+    return Column(children: [Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: Colors.blue.withOpacity(0.1), shape: BoxShape.circle), child: Icon(icon, color: Colors.blue)), const SizedBox(height: 4), Text(time, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.blue))]);
   }
 }
 
-// --- WIDGET MENU TÌM KIẾM ---
 class SearchResultSheet extends StatefulWidget {
   final ScrollController scrollController;
   final List<PlaceData> allPlaces;
@@ -733,164 +548,124 @@ class SearchResultSheet extends StatefulWidget {
   final Function(PlaceData) onToggleFavorite;
   final Function(PlaceData) onGetDirection;
 
-  const SearchResultSheet({
-    super.key,
-    required this.scrollController,
-    required this.allPlaces,
-    required this.hintText,
-    required this.myLocation,
-    required this.onPlaceSelected,
-    required this.onToggleFavorite,
-    required this.onGetDirection,
-  });
+  const SearchResultSheet({super.key, required this.scrollController, required this.allPlaces, required this.hintText, required this.myLocation, required this.onPlaceSelected, required this.onToggleFavorite, required this.onGetDirection});
 
   @override
   State<SearchResultSheet> createState() => _SearchResultSheetState();
 }
-
 class _SearchResultSheetState extends State<SearchResultSheet> {
   String _searchQuery = "";
   final Set<PlaceType> _selectedFilters = {}; 
-  
-  // Logic Load More
   int _currentMax = 8; 
   bool _isLoadingMore = false;
   late ScrollController _internalScrollController;
 
   @override
-  void initState() {
-    super.initState();
-    _internalScrollController = widget.scrollController;
-    _internalScrollController.addListener(_scrollListener);
-  }
-
-  void _scrollListener() {
-    if (_internalScrollController.position.pixels == _internalScrollController.position.maxScrollExtent) {
-      _loadMore();
-    }
-  }
-
-  void _loadMore() async {
-    if (_isLoadingMore) return;
-    setState(() => _isLoadingMore = true);
-    await Future.delayed(const Duration(seconds: 1)); 
-    setState(() {
-      _currentMax += 5; 
-      _isLoadingMore = false;
-    });
-  }
-
-  // Helper tính khoảng cách
-  String _getDistanceString(LatLng p1, LatLng p2) {
-    double distMeters = Geolocator.distanceBetween(p1.latitude, p1.longitude, p2.latitude, p2.longitude);
-    if (distMeters >= 1000) {
-      return "${(distMeters / 1000).toStringAsFixed(1)} km";
-    }
-    return "${distMeters.toStringAsFixed(0)} m";
-  }
+  void initState() { super.initState(); _internalScrollController = widget.scrollController; _internalScrollController.addListener(_scrollListener); }
+  void _scrollListener() { if (_internalScrollController.position.pixels == _internalScrollController.position.maxScrollExtent) _loadMore(); }
+  void _loadMore() async { if (_isLoadingMore) return; setState(() => _isLoadingMore = true); await Future.delayed(const Duration(seconds: 1)); setState(() { _currentMax += 5; _isLoadingMore = false; }); }
+  String _getDistanceString(LatLng p1, LatLng p2) { double dist = Geolocator.distanceBetween(p1.latitude, p1.longitude, p2.latitude, p2.longitude); return dist >= 1000 ? "${(dist/1000).toStringAsFixed(1)} km" : "${dist.toStringAsFixed(0)} m"; }
 
   @override
   Widget build(BuildContext context) {
-    List<PlaceData> filteredPlaces = widget.allPlaces.where((place) {
-      bool matchText = place.name.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-                       place.address.toLowerCase().contains(_searchQuery.toLowerCase());
-      bool matchType = _selectedFilters.isEmpty || _selectedFilters.contains(place.type);
-      return matchText && matchType;
-    }).toList();
-
+    List<PlaceData> filteredPlaces = widget.allPlaces.where((place) { bool matchText = place.name.toLowerCase().contains(_searchQuery.toLowerCase()) || place.address.toLowerCase().contains(_searchQuery.toLowerCase()); bool matchType = _selectedFilters.isEmpty || _selectedFilters.contains(place.type); return matchText && matchType; }).toList();
     int itemCountToDisplay = min(filteredPlaces.length, _currentMax);
     bool hasMore = filteredPlaces.length > _currentMax;
 
-    return Container(
-      decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      child: Column(
-        children: [
-          Center(child: Container(margin: const EdgeInsets.only(top: 10), width: 40, height: 5, decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(10)))),
-          Padding(
-            padding: const EdgeInsets.all(15.0),
-            child: TextField(
-              autofocus: false, 
-              onChanged: (val) => setState(() => _searchQuery = val),
-              decoration: InputDecoration(
-                hintText: widget.hintText,
-                prefixIcon: const Icon(Icons.search),
-                suffixIcon: IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context)),
-                filled: true, fillColor: Colors.grey[100],
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(30), borderSide: BorderSide.none),
-                contentPadding: const EdgeInsets.symmetric(vertical: 0),
-              ),
-            ),
-          ),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 15),
-            child: Row(children: [_buildFilterChip("Cafe", PlaceType.cafe), const SizedBox(width: 10), _buildFilterChip("Thư viện", PlaceType.library), const SizedBox(width: 10), _buildFilterChip("Work-space", PlaceType.workspace)]),
-          ),
-          const Divider(),
-          Expanded(
-            child: filteredPlaces.isEmpty 
-            ? const Center(child: Text("Không tìm thấy địa điểm nào.", style: TextStyle(color: Colors.grey)))
-            : ListView.builder(
-              controller: _internalScrollController, 
-              itemCount: itemCountToDisplay + (hasMore ? 1 : 0),
-              itemBuilder: (context, index) {
-                if (index == itemCountToDisplay) {
-                   return const Padding(padding: EdgeInsets.all(10), child: Center(child: CircularProgressIndicator()));
-                }
-                final place = filteredPlaces[index];
-                String distance = _getDistanceString(widget.myLocation, place.location);
-
-                return ListTile(
-                  onTap: () => widget.onPlaceSelected(place),
-                  leading: CircleAvatar(backgroundColor: place.color.withOpacity(0.1), child: Icon(place.icon, color: place.color)),
-                  title: Text(place.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-                  subtitle: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(place.address, maxLines: 1, overflow: TextOverflow.ellipsis),
-                      const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          Container(padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2), decoration: BoxDecoration(color: place.noiseColor.withOpacity(0.15), borderRadius: BorderRadius.circular(4)), child: Text(place.noiseLevel, style: TextStyle(fontSize: 11, color: place.noiseColor, fontWeight: FontWeight.bold))),
-                          const SizedBox(width: 8),
-                          // HIỂN THỊ KHOẢNG CÁCH
-                          Icon(Icons.near_me, size: 14, color: Colors.grey[600]),
-                          const SizedBox(width: 2),
-                          Text(distance, style: TextStyle(fontSize: 11, color: Colors.grey[600], fontWeight: FontWeight.bold)),
-                          const SizedBox(width: 8),
-                          if (place.hasWifi) const Row(children: [Icon(Icons.wifi, size: 14, color: Colors.blue), SizedBox(width: 4), Text("Wifi Free", style: TextStyle(fontSize: 11, color: Colors.blue))]),
-                        ],
-                      )
-                    ],
-                  ),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min, 
-                    children: [
-                      IconButton(icon: const Icon(Icons.directions, color: Colors.blue), onPressed: () => widget.onGetDirection(place)),
-                      IconButton(icon: Icon(place.isFavorite ? Icons.favorite : Icons.favorite_border, color: place.isFavorite ? Colors.red : Colors.grey), onPressed: () { widget.onToggleFavorite(place); setState(() {}); }),
-                    ],
-                  ),
-                );
-              },
-            ),
-          ),
-        ],
-      ),
-    );
+    return Container(decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(20))), child: Column(children: [Center(child: Container(margin: const EdgeInsets.only(top: 10), width: 40, height: 5, decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(10)))), Padding(padding: const EdgeInsets.all(15.0), child: TextField(autofocus: false, onChanged: (val) => setState(() => _searchQuery = val), decoration: InputDecoration(hintText: widget.hintText, prefixIcon: const Icon(Icons.search), suffixIcon: IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context)), filled: true, fillColor: Colors.grey[100], border: OutlineInputBorder(borderRadius: BorderRadius.circular(30), borderSide: BorderSide.none), contentPadding: const EdgeInsets.symmetric(vertical: 0)))), SingleChildScrollView(scrollDirection: Axis.horizontal, padding: const EdgeInsets.symmetric(horizontal: 15), child: Row(children: [_buildFilterChip("Cafe", PlaceType.cafe), const SizedBox(width: 10), _buildFilterChip("Thư viện", PlaceType.library), const SizedBox(width: 10), _buildFilterChip("Work-space", PlaceType.workspace)])), const Divider(), Expanded(child: filteredPlaces.isEmpty ? const Center(child: Text("Không tìm thấy địa điểm nào.", style: TextStyle(color: Colors.grey))) : ListView.builder(controller: _internalScrollController, itemCount: itemCountToDisplay + (hasMore ? 1 : 0), itemBuilder: (context, index) { if (index == itemCountToDisplay) return const Padding(padding: EdgeInsets.all(10), child: Center(child: CircularProgressIndicator())); final place = filteredPlaces[index]; String distance = _getDistanceString(widget.myLocation, place.location); return ListTile(onTap: () => widget.onPlaceSelected(place), leading: CircleAvatar(backgroundColor: place.color.withOpacity(0.1), child: Icon(place.icon, color: place.color)), title: Text(place.name, style: const TextStyle(fontWeight: FontWeight.bold)), subtitle: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(place.address, maxLines: 1, overflow: TextOverflow.ellipsis), const SizedBox(height: 4), Row(children: [Container(padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2), decoration: BoxDecoration(color: place.noiseColor.withOpacity(0.15), borderRadius: BorderRadius.circular(4)), child: Text(place.noiseLevel, style: TextStyle(fontSize: 11, color: place.noiseColor, fontWeight: FontWeight.bold))), const SizedBox(width: 8), Icon(Icons.near_me, size: 14, color: Colors.grey[600]), const SizedBox(width: 2), Text(distance, style: TextStyle(fontSize: 11, color: Colors.grey[600], fontWeight: FontWeight.bold))])]), trailing: Row(mainAxisSize: MainAxisSize.min, children: [IconButton(icon: const Icon(Icons.directions, color: Colors.blue), onPressed: () => widget.onGetDirection(place)), IconButton(icon: Icon(place.isFavorite ? Icons.favorite : Icons.favorite_border, color: place.isFavorite ? Colors.red : Colors.grey), onPressed: () { widget.onToggleFavorite(place); setState(() {}); })])); }))]));
   }
+  Widget _buildFilterChip(String label, PlaceType type) { bool isSelected = _selectedFilters.contains(type); return FilterChip(label: Text(label), selected: isSelected, onSelected: (bool selected) { setState(() { if (selected) _selectedFilters.add(type); else _selectedFilters.remove(type); }); }, selectedColor: Colors.teal.withOpacity(0.2), checkmarkColor: Colors.teal, labelStyle: TextStyle(color: isSelected ? Colors.teal : Colors.black), backgroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: BorderSide(color: isSelected ? Colors.teal : Colors.grey.shade300))); }
+}
 
-  Widget _buildFilterChip(String label, PlaceType type) {
-    bool isSelected = _selectedFilters.contains(type);
-    return FilterChip(
-      label: Text(label), selected: isSelected,
-      onSelected: (bool selected) { setState(() { if (selected) _selectedFilters.add(type); else _selectedFilters.remove(type); }); },
-      selectedColor: Colors.teal.withOpacity(0.2), checkmarkColor: Colors.teal,
-      labelStyle: TextStyle(color: isSelected ? Colors.teal : Colors.black), backgroundColor: Colors.white,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: BorderSide(color: isSelected ? Colors.teal : Colors.grey.shade300)),
+// --- WIDGET CHART (CẬP NHẬT: MÀU XÁM + CHỈ TÔ MÀU CỘT HIỆN TẠI) ---
+// --- CẬP NHẬT: HIỂN THỊ ĐÚNG PHÚT ---
+class NoiseChart extends StatelessWidget {
+  final List<double> hourlyData;
+  const NoiseChart({super.key, required this.hourlyData});
+
+  @override
+  Widget build(BuildContext context) {
+    // 1. Lấy thời gian thực tế
+    final now = DateTime.now();
+    int currentHour = now.hour;
+    int currentMinute = now.minute;
+
+    // 2. Format phút: Đảm bảo luôn có 2 chữ số (VD: 9 -> 09)
+    String minuteStr = currentMinute.toString().padLeft(2, '0');
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text("Dự báo độ ồn", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey)),
+            // Badge giờ hiện tại
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(color: Colors.blue.withOpacity(0.1), borderRadius: BorderRadius.circular(4)),
+              // 3. Hiển thị giờ : phút
+              child: Text("Bây giờ: $currentHour:$minuteStr", style: const TextStyle(fontSize: 10, color: Colors.blue, fontWeight: FontWeight.bold)),
+            )
+          ],
+        ),
+        const SizedBox(height: 10),
+        SizedBox(
+          height: 100, 
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.end, 
+            mainAxisAlignment: MainAxisAlignment.spaceBetween, 
+            children: List.generate(hourlyData.length, (index) {
+              int hour = 7 + index; 
+              bool isNow = hour == currentHour;
+              double noiseVal = hourlyData[index];
+              
+              // Logic màu: Chỉ tô màu cột hiện tại, còn lại xám
+              Color barColor;
+              if (isNow) {
+                 if (noiseVal < 55) barColor = Colors.green; 
+                 else if (noiseVal < 75) barColor = Colors.amber; 
+                 else barColor = Colors.redAccent;
+              } else {
+                 barColor = Colors.grey.shade300; 
+              }
+
+              double barHeight = (noiseVal - 20) * 1.2; 
+              if (barHeight < 10) barHeight = 10;
+              if (barHeight > 80) barHeight = 80;
+
+              return Column(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  if (isNow) 
+                    const Text("Now", style: TextStyle(fontSize: 9, color: Colors.blue, fontWeight: FontWeight.bold, height: 1))
+                  else 
+                    const SizedBox(height: 9), 
+
+                  Container(
+                    width: 12, 
+                    height: barHeight,
+                    margin: const EdgeInsets.symmetric(vertical: 2),
+                    decoration: BoxDecoration(
+                      color: barColor, 
+                      borderRadius: BorderRadius.circular(3),
+                      border: isNow ? Border.all(color: Colors.blue, width: 2) : null,
+                    ),
+                  ),
+                  
+                  Text(
+                    (hour == 7 || hour == 12 || hour == 18 || hour == 22) ? "$hour" : "", 
+                    style: const TextStyle(fontSize: 9, color: Colors.grey, height: 1)
+                  ),
+                ],
+              );
+            }),
+          ),
+        ),
+      ],
     );
   }
 }
-
 // --- WIDGET BONG BÓNG ---
 class InfoBubble extends StatelessWidget {
   final PlaceData place;
@@ -900,13 +675,9 @@ class InfoBubble extends StatelessWidget {
 
   const InfoBubble({super.key, required this.place, required this.myLocation, required this.onDirectionsPressed, required this.onFavoritePressed});
 
-  // Helper tính khoảng cách
   String _getDistanceString() {
-    double distMeters = Geolocator.distanceBetween(myLocation.latitude, myLocation.longitude, place.location.latitude, place.location.longitude);
-    if (distMeters >= 1000) {
-      return "${(distMeters / 1000).toStringAsFixed(1)} km";
-    }
-    return "${distMeters.toStringAsFixed(0)} m";
+    double dist = Geolocator.distanceBetween(myLocation.latitude, myLocation.longitude, place.location.latitude, place.location.longitude);
+    return dist >= 1000 ? "${(dist/1000).toStringAsFixed(1)} km" : "${dist.toStringAsFixed(0)} m";
   }
 
   @override
@@ -956,13 +727,13 @@ class InfoBubble extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Row(children: [Icon(Icons.volume_up, size: 16, color: place.noiseColor), const SizedBox(width: 5), Text(place.noiseLevel, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: place.noiseColor))]),
-                  const SizedBox(width: 10),
-                  // KHOẢNG CÁCH (CÙNG DÒNG)
                   Row(children: [Icon(Icons.near_me, size: 14, color: Colors.grey[600]), const SizedBox(width: 3), Text(distance, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey[600]))]),
-                  const SizedBox(width: 10),
                   Row(children: [Icon(place.hasWifi ? Icons.wifi : Icons.wifi_off, size: 16, color: place.hasWifi ? Colors.blue : Colors.grey), const SizedBox(width: 5), Text(place.hasWifi ? "Wifi Free" : "No Wifi", style: const TextStyle(fontSize: 12))]),
                 ],
-              )
+              ),
+              const SizedBox(height: 12),
+              
+              NoiseChart(hourlyData: place.generateHourlyNoise()), 
             ],
           ),
         ),
@@ -972,48 +743,11 @@ class InfoBubble extends StatelessWidget {
   }
 }
 
-// --- CLASS PHỤ TRỢ (GIỮ NGUYÊN) ---
 class TriangleClipper extends CustomClipper<ui.Path> {
   @override
-  ui.Path getClip(Size size) {
-    final path = ui.Path();
-    path.lineTo(size.width / 2, size.height);
-    path.lineTo(size.width, 0);
-    path.close();
-    return path;
-  }
+  ui.Path getClip(Size size) { final path = ui.Path(); path.lineTo(size.width / 2, size.height); path.lineTo(size.width, 0); path.close(); return path; }
   @override
   bool shouldReclip(CustomClipper<ui.Path> oldClipper) => false;
 }
-
-class PulsingLocationDot extends StatefulWidget {
-  const PulsingLocationDot({super.key});
-  @override
-  State<PulsingLocationDot> createState() => _PulsingLocationDotState();
-}
-
-class _PulsingLocationDotState extends State<PulsingLocationDot> with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _animation;
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(duration: const Duration(milliseconds: 1500), vsync: this)..repeat(reverse: true);
-    _animation = Tween<double>(begin: 0.8, end: 1.1).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
-  }
-  @override
-  void dispose() { _controller.dispose(); super.dispose(); }
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _animation,
-      builder: (context, child) => Transform.scale(
-        scale: _animation.value,
-        child: Stack(alignment: Alignment.center, children: [
-          Container(width: 22, height: 22, decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle, boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 3)])),
-          Container(width: 16, height: 16, decoration: const BoxDecoration(color: Color(0xFF4285F4), shape: BoxShape.circle)),
-        ]),
-      ),
-    );
-  }
-}
+class PulsingLocationDot extends StatefulWidget { const PulsingLocationDot({super.key}); @override State<PulsingLocationDot> createState() => _PulsingLocationDotState(); }
+class _PulsingLocationDotState extends State<PulsingLocationDot> with SingleTickerProviderStateMixin { late AnimationController _controller; late Animation<double> _animation; @override void initState() { super.initState(); _controller = AnimationController(duration: const Duration(milliseconds: 1500), vsync: this)..repeat(reverse: true); _animation = Tween<double>(begin: 0.8, end: 1.1).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut)); } @override void dispose() { _controller.dispose(); super.dispose(); } @override Widget build(BuildContext context) { return AnimatedBuilder(animation: _animation, builder: (context, child) => Transform.scale(scale: _animation.value, child: Stack(alignment: Alignment.center, children: [Container(width: 22, height: 22, decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle, boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 3)])), Container(width: 16, height: 16, decoration: const BoxDecoration(color: Color(0xFF4285F4), shape: BoxShape.circle))]))); } }
