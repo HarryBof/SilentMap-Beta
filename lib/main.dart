@@ -50,7 +50,6 @@ class PlaceData {
     }
   }
 
-  // Màu hiển thị trên icon loa nhỏ
   Color get noiseColor {
     double db = _parseDb();
     if (db < 50) return Colors.green; 
@@ -67,7 +66,6 @@ class PlaceData {
     }
   }
 
-  // Thuật toán tạo dữ liệu biểu đồ
   List<double> generateHourlyNoise() {
     double baseDb = _parseDb();
     List<double> data = [];
@@ -271,11 +269,35 @@ class _SilentMapAppState extends State<SilentMapApp> with TickerProviderStateMix
     );
   }
 
+  // --- HÀM HỖ TRỢ XÂY DỰNG NÚT CHỌN LOẠI ĐỊA ĐIỂM ---
+  Widget _buildNewTypeOption(PlaceType type, PlaceType current, Color primaryColor, Function(PlaceType) onTap) {
+    bool isSelected = type == current;
+    IconData icon;
+    String label;
+    switch(type) {
+      case PlaceType.cafe: icon = Icons.local_cafe_outlined; label = "Cafe"; break;
+      case PlaceType.library: icon = Icons.local_library_outlined; label = "Thư viện"; break;
+      default: icon = Icons.laptop_mac; label = "Work-space"; break;
+    }
+    return Expanded(
+      child: InkWell(
+        onTap: () => onTap(type),
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          decoration: BoxDecoration(color: isSelected ? primaryColor.withOpacity(0.1) : Colors.transparent, borderRadius: BorderRadius.circular(12), border: Border.all(color: isSelected ? primaryColor : Colors.grey.shade300, width: isSelected ? 2 : 1)),
+          child: Column(children: [Icon(icon, color: isSelected ? primaryColor : Colors.grey, size: 28), const SizedBox(height: 5), Text(label, style: TextStyle(fontSize: 12, color: isSelected ? primaryColor : Colors.grey, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal))]),
+        ),
+      ),
+    );
+  }
+
+  // --- CẬP NHẬT DIALOG GHIM VỊ TRÍ ---
   void _showAddPlaceDialog() {
     final TextEditingController nameCtrl = TextEditingController();
     final TextEditingController addrCtrl = TextEditingController();
     PlaceType selectedType = PlaceType.cafe;
-    bool hasWifi = true;
+    bool hasWifi = true; // Mặc định là có Wifi
     const Color primaryColor = Color(0xFF009688); 
     String currentNoiseLevelStr = "${_averageDb.toStringAsFixed(1)} dB";
 
@@ -311,7 +333,36 @@ class _SilentMapAppState extends State<SilentMapApp> with TickerProviderStateMix
                       TextField(controller: nameCtrl, decoration: InputDecoration(prefixIcon: const Icon(Icons.place_outlined), hintText: 'Tên địa điểm', border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)))),
                       const SizedBox(height: 12),
                       TextField(controller: addrCtrl, decoration: InputDecoration(prefixIcon: const Icon(Icons.map_outlined), hintText: 'Địa chỉ', border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)))),
+                      
+                      // --- KHÔI PHỤC CHỌN LOẠI ĐỊA ĐIỂM ---
                       const SizedBox(height: 20),
+                      const Text('Loại địa điểm:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          _buildNewTypeOption(PlaceType.cafe, selectedType, primaryColor, (t) => setDialogState(() => selectedType = t)),
+                          const SizedBox(width: 8),
+                          _buildNewTypeOption(PlaceType.library, selectedType, primaryColor, (t) => setDialogState(() => selectedType = t)),
+                          const SizedBox(width: 8),
+                          _buildNewTypeOption(PlaceType.workspace, selectedType, primaryColor, (t) => setDialogState(() => selectedType = t)),
+                        ],
+                      ),
+
+                      // --- KHÔI PHỤC CHỌN WIFI ---
+                      const SizedBox(height: 20),
+                      const Text('Wifi miễn phí:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.start,
+                        children: [
+                          Radio<bool>(value: true, groupValue: hasWifi, activeColor: primaryColor, materialTapTargetSize: MaterialTapTargetSize.shrinkWrap, onChanged: (val) => setDialogState(() => hasWifi = val!)),
+                          const Text('Có'),
+                          const SizedBox(width: 30),
+                          Radio<bool>(value: false, groupValue: hasWifi, activeColor: primaryColor, materialTapTargetSize: MaterialTapTargetSize.shrinkWrap, onChanged: (val) => setDialogState(() => hasWifi = val!)),
+                          const Text('Không'),
+                        ],
+                      ),
+
+                      const SizedBox(height: 25),
                       Row(mainAxisAlignment: MainAxisAlignment.end, children: [
                           TextButton(onPressed: () => Navigator.pop(context), child: const Text('Hủy')),
                           const SizedBox(width: 10),
@@ -425,7 +476,8 @@ class _SilentMapAppState extends State<SilentMapApp> with TickerProviderStateMix
                     width: 50, height: 50, 
                     alignment: Alignment.bottomCenter, // Mũi nhọn chạm đất
                     child: GestureDetector(
-                      onTap: () { setState(() { _selectedPlace = place; }); },
+                      onTap: () { setState(() { _selectedPlace = place; }); 
+                      _animatedMapMove(place.location, 17.0, 0.0);},
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.end, 
                         children: [
@@ -445,7 +497,7 @@ class _SilentMapAppState extends State<SilentMapApp> with TickerProviderStateMix
                     Marker(
                       point: _selectedPlace!.location, 
                       width: 320, 
-                      height: 326, // Tăng chiều cao để chứa đủ nội dung
+                      height: 326, // GIỮ NGUYÊN CHIỀU CAO NHƯ YÊU CẦU
                       alignment: Alignment.topCenter, 
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.end,
@@ -506,7 +558,8 @@ class _SilentMapAppState extends State<SilentMapApp> with TickerProviderStateMix
                       const Text("dB", style: TextStyle(color: Colors.grey)),
                       if (_isRecording) ...[const SizedBox(height: 15), LinearProgressIndicator(value: _progressValue, backgroundColor: Colors.grey[200], color: currentGradient.last, minHeight: 8, borderRadius: BorderRadius.circular(5))],
                       const SizedBox(height: 15),
-                      SizedBox(width: double.infinity, height: 50, child: Row(children: [Expanded(flex: hasFinishedMeasuring ? 4 : 1, child: ElevatedButton(onPressed: _isRecording ? null : _preMeasureCheck, style: ElevatedButton.styleFrom(backgroundColor: currentGradient.last, foregroundColor: Colors.white), child: Text(_isRecording ? "ĐO..." : "BẮT ĐẦU ĐO"))), if (hasFinishedMeasuring) ...[const SizedBox(width: 10), Expanded(flex: 6, child: ElevatedButton.icon(onPressed: _showAddPlaceDialog, icon: const Icon(Icons.add_location_alt), label: const Text("GHIM VỊ TRÍ"), style: ElevatedButton.styleFrom(backgroundColor: Colors.orange, foregroundColor: Colors.white)))]])),
+                      // --- CẬP NHẬT: HIỂN THỊ NÚT ĐO LẠI / ĐANG ĐO ---
+                      SizedBox(width: double.infinity, height: 50, child: Row(children: [Expanded(flex: hasFinishedMeasuring ? 4 : 1, child: ElevatedButton(onPressed: _isRecording ? null : _preMeasureCheck, style: ElevatedButton.styleFrom(backgroundColor: currentGradient.last, foregroundColor: Colors.white), child: Text(_isRecording ? "ĐANG ĐO..." : (hasFinishedMeasuring ? "ĐO LẠI" : "BẮT ĐẦU ĐO")))), if (hasFinishedMeasuring) ...[const SizedBox(width: 10), Expanded(flex: 6, child: ElevatedButton.icon(onPressed: _showAddPlaceDialog, icon: const Icon(Icons.add_location_alt), label: const Text("GHIM VỊ TRÍ"), style: ElevatedButton.styleFrom(backgroundColor: Colors.orange, foregroundColor: Colors.white)))]])),
                     ],
                   ),
                 ),
@@ -563,7 +616,7 @@ class _SearchResultSheetState extends State<SearchResultSheet> {
   @override
   void initState() { super.initState(); _internalScrollController = widget.scrollController; _internalScrollController.addListener(_scrollListener); }
   void _scrollListener() { if (_internalScrollController.position.pixels == _internalScrollController.position.maxScrollExtent) _loadMore(); }
-  void _loadMore() async { if (_isLoadingMore) return; setState(() => _isLoadingMore = true); await Future.delayed(const Duration(seconds: 1)); setState(() { _currentMax += 5; _isLoadingMore = false; }); }
+  void _loadMore() async { if (_isLoadingMore) return; setState(() => _isLoadingMore = true); await Future.delayed(const Duration(seconds: 1)); if (!mounted) return; setState(() { _currentMax += 5; _isLoadingMore = false; }); }
   String _getDistanceString(LatLng p1, LatLng p2) { double dist = Geolocator.distanceBetween(p1.latitude, p1.longitude, p2.latitude, p2.longitude); return dist >= 1000 ? "${(dist/1000).toStringAsFixed(1)} km" : "${dist.toStringAsFixed(0)} m"; }
 
   @override
@@ -577,20 +630,16 @@ class _SearchResultSheetState extends State<SearchResultSheet> {
   Widget _buildFilterChip(String label, PlaceType type) { bool isSelected = _selectedFilters.contains(type); return FilterChip(label: Text(label), selected: isSelected, onSelected: (bool selected) { setState(() { if (selected) _selectedFilters.add(type); else _selectedFilters.remove(type); }); }, selectedColor: Colors.teal.withOpacity(0.2), checkmarkColor: Colors.teal, labelStyle: TextStyle(color: isSelected ? Colors.teal : Colors.black), backgroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: BorderSide(color: isSelected ? Colors.teal : Colors.grey.shade300))); }
 }
 
-// --- WIDGET CHART (CẬP NHẬT: MÀU XÁM + CHỈ TÔ MÀU CỘT HIỆN TẠI) ---
-// --- CẬP NHẬT: HIỂN THỊ ĐÚNG PHÚT ---
+// --- WIDGET CHART (GIỮ NGUYÊN) ---
 class NoiseChart extends StatelessWidget {
   final List<double> hourlyData;
   const NoiseChart({super.key, required this.hourlyData});
 
   @override
   Widget build(BuildContext context) {
-    // 1. Lấy thời gian thực tế
     final now = DateTime.now();
     int currentHour = now.hour;
     int currentMinute = now.minute;
-
-    // 2. Format phút: Đảm bảo luôn có 2 chữ số (VD: 9 -> 09)
     String minuteStr = currentMinute.toString().padLeft(2, '0');
 
     return Column(
@@ -600,11 +649,9 @@ class NoiseChart extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             const Text("Dự báo độ ồn", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey)),
-            // Badge giờ hiện tại
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
               decoration: BoxDecoration(color: Colors.blue.withOpacity(0.1), borderRadius: BorderRadius.circular(4)),
-              // 3. Hiển thị giờ : phút
               child: Text("Bây giờ: $currentHour:$minuteStr", style: const TextStyle(fontSize: 10, color: Colors.blue, fontWeight: FontWeight.bold)),
             )
           ],
@@ -620,7 +667,6 @@ class NoiseChart extends StatelessWidget {
               bool isNow = hour == currentHour;
               double noiseVal = hourlyData[index];
               
-              // Logic màu: Chỉ tô màu cột hiện tại, còn lại xám
               Color barColor;
               if (isNow) {
                  if (noiseVal < 55) barColor = Colors.green; 
@@ -666,7 +712,8 @@ class NoiseChart extends StatelessWidget {
     );
   }
 }
-// --- WIDGET BONG BÓNG ---
+
+// --- WIDGET BONG BÓNG (GIỮ NGUYÊN) ---
 class InfoBubble extends StatelessWidget {
   final PlaceData place;
   final LatLng myLocation; 
