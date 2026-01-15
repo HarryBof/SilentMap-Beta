@@ -474,7 +474,7 @@ class _SilentMapAppState extends State<SilentMapApp> with TickerProviderStateMix
                   }).map((place) => Marker(
                     point: place.location, 
                     width: 50, height: 50, 
-                    alignment: Alignment.bottomCenter, // Mũi nhọn chạm đất
+                    alignment: Alignment.topCenter, // Mũi nhọn chạm đất
                     child: GestureDetector(
                       onTap: () { setState(() { _selectedPlace = place; }); 
                       _animatedMapMove(place.location, 17.0, 0.0);},
@@ -497,8 +497,9 @@ class _SilentMapAppState extends State<SilentMapApp> with TickerProviderStateMix
                     Marker(
                       point: _selectedPlace!.location, 
                       width: 320, 
-                      height: 326, // GIỮ NGUYÊN CHIỀU CAO NHƯ YÊU CẦU
-                      alignment: Alignment.topCenter, 
+                      height: 500, // GIỮ NGUYÊN CHIỀU CAO NHƯ YÊU CẦU
+                      alignment: Alignment.topCenter
+                      , 
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.end,
                         children: [
@@ -508,7 +509,7 @@ class _SilentMapAppState extends State<SilentMapApp> with TickerProviderStateMix
                             onDirectionsPressed: () { _getDirections(_selectedPlace!.location); },
                             onFavoritePressed: () => _toggleFavorite(_selectedPlace!), 
                           ),
-                          const SizedBox(height: 2), 
+                          const SizedBox(height: 60), 
                         ],
                       ),
                     ),
